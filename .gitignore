@@ -1,0 +1,105 @@
+# ============================================================
+# TS-Enhancer-Extreme Git Ignore
+# Prevents sensitive data and build artifacts from being leaked
+# ============================================================
+
+# Build artifacts
+/build/
+build/
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# Rust build artifacts
+tsee/**/target/
+**/*.rlib
+**/*.rmeta
+**/*.d
+
+# Android build artifacts
+*.apk
+*.aab
+*.dex
+*.class
+.gradle/
+local.properties
+
+# Node.js / WebUI build artifacts
+node_modules/
+.parcel-cache/
+dist/
+*.map
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.old
+*.orig
+
+# Sensitive data - NEVER commit these
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.priv
+*.secret
+.env
+.env.local
+.env.*.local
+
+# Signing artifacts (if any external keys are used)
+keystore/
+keys/
+signing/
+
+# Test outputs
+test-results/
+coverage/
+*.profraw
+*.profdata
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Cache directories
+.cache/
+*.cache
+
+# Debug symbols
+*.sym
+*.pdb
+*.dbg
+
+# Core dumps
+core
+core.*
+*.core
+
+# Generated manifest files (these are generated during build)
+*.sha256
+MANIFEST
