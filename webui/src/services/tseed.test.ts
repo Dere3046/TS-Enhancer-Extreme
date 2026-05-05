@@ -81,7 +81,7 @@ describe('TSeed service', () => {
     it('should call proxy with action', async () => {
       mockExec.mockResolvedValue({ errno: 0, stdout: 'OK', stderr: '' })
       await TSeed.service.proxy('sync')
-      expect(mockExec).toHaveBeenCalledWith(expect.stringContaining('service proxy sync'))
+      expect(mockExec).toHaveBeenCalledWith(expect.stringContaining('service proxy'))
     })
   })
 

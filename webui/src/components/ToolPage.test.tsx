@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import React from 'react'
 import { ToolPage } from '../components/ToolPage'
 import { AppProvider } from '../contexts/AppContext'
+import { ThemeProvider } from '../contexts/ThemeContext'
+import { I18nProvider } from '../contexts/I18nContext'
 
 // Mock TSeed
 vi.mock('../services/tseed', () => ({
@@ -26,10 +28,14 @@ vi.mock('../services/tseed', () => ({
 describe('ToolPage', () => {
   it('should render tool page', () => {
     render(
-      React.createElement(AppProvider, null,
-        React.createElement(ToolPage, null)
+      React.createElement(I18nProvider, null,
+        React.createElement(ThemeProvider, null,
+          React.createElement(AppProvider, null,
+            React.createElement(ToolPage, null)
+          )
+        )
       )
     )
-    expect(screen.getByText(/VBHash/i)).toBeInTheDocument()
+    expect(screen.getByText(/服务控制/)).toBeInTheDocument()
   })
 })
