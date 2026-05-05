@@ -74,6 +74,16 @@ jobs:
           RUSTFLAGS: -A unused_imports -A dead_code
         run: cmake --build build --target ts-enhancer-extreme -j $(nproc)
 
+      - name: Test WebUI
+        working-directory: webui
+        run: |
+          npm install
+          npm run test
+
+      - name: Test TSEED (unit tests)
+        working-directory: tsee/tseed
+        run: cargo test --lib
+
       - uses: actions/upload-artifact@v4
         with:
           name: ts_enhancer_extreme
