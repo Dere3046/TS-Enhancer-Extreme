@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { TSeed, Shell, isExecReady, showToast, requestFullScreen } from '../services/tseed'
+import { TSeed, showToast, requestFullScreen } from '../services/tseed'
 
 describe('TSeed service', () => {
   const mockExec = vi.fn()
