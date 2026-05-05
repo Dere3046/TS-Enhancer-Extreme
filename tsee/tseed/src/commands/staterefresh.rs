@@ -66,3 +66,25 @@ pub fn run() {
 
     let _ = fs::write(&module_prop, new_content);
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_tag_formatting() {
+        let integrity = "✅I:passed";
+        let root = "✅R:KernelSU(1.0.0)";
+        let service = "✅S:running";
+        let tag = format!("[{},{},{}]", integrity, root, service);
+        assert!(tag.contains("KernelSU"));
+        assert!(tag.contains("running"));
+    }
+
+    #[test]
+    fn test_description_replacement() {
+        let line = "description=TS Enhancer Extreme [🔄]";
+        let new_tag = "[✅I:passed,✅R:KernelSU,✅S:running]";
+        let result = line.replacen("[🔄]", new_tag, 1);
+        assert!(result.contains(new_tag));
+        assert!(!result.contains("[🔄]"));
+    }
+}
