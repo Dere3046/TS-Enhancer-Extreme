@@ -36,21 +36,52 @@ invoke "Spoof bootloader state" "system passpropstate"
 # Sync proxy targets after TSEET has started
 (sleep 5 && invoke "Sync proxy targets" "service proxy sync") &
 
-# Keeps TSEET always running. Rate-limited restart on instant crash.
+# ── TSEET Keep-alive with crash protection ────────────────────
 cd $MODDIR
+FLAG_FILE="$TSEEMODDIR/.tseet_enabled"
+PID_FILE="$TSEECONFIG/proxy.pid"
+
 (
   crashCount=0
-  while true; do
-    logs "I" "Starting TSEET daemon"
-    ./daemon start
-    crashCount=$((crashCount + 1))
-    if [ $crashCount -ge 3 ]; then
-      logs "E" "TSEET crashed 3 times, backing off 5s"
-      sleep 5
-      crashCount=0
+  backoff=1
+
+  while [ -f "$FLAG_FILE" ]; do
+    logs "I" "Starting TSEET daemon (attempt $((crashCount + 1)))"
+
+    ./daemon start &
+    daemonPid=$!
+    wait $daemonPid
+    exitCode=$?
+
+    # Detect OOM (exit code 137 = SIGKILL, likely OOM)
+    if [ $exitCode -eq 137 ]; then
+      logs "E" "TSEET killed (exit 137), possible OOM"
+      crashCount=$((crashCount + 1))
+    elif [ $exitCode -ne 0 ]; then
+      logs "W" "TSEET exited with code $exitCode"
+      crashCount=$((crashCount + 1))
     else
-      logs "W" "TSEET exited, restarting in 1s"
-      sleep 1
+      logs "I" "TSEET exited normally"
+      crashCount=0
+      backoff=1
+      break
+    fi
+
+    # Stop after 5 consecutive crashes to avoid infinite loop
+    if [ $crashCount -ge 5 ]; then
+      logs "E" "TSEET crashed $crashCount times, giving up"
+      rm -f "$PID_FILE"
+      break
+    fi
+
+    # Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+    logs "W" "Restarting TSEET in ${backoff}s"
+    sleep $backoff
+    backoff=$((backoff * 2))
+    if [ $backoff -gt 30 ]; then
+      backoff=30
     fi
   done
+
+  logs "I" "TSEET keep-alive stopped"
 ) &
