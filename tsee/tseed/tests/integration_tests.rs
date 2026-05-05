@@ -31,8 +31,6 @@ fn is_android_env() -> bool {
 }
 
 mod cli_tests {
-    use super::*;
-
     #[test]
     #[cfg(target_os = "android")]
     fn test_help_flag() {
@@ -76,8 +74,6 @@ mod cli_tests {
 }
 
 mod proxyctl_tests {
-    use super::*;
-
     #[test]
     #[cfg(target_os = "android")]
     fn test_proxyctl_help() {
@@ -111,8 +107,6 @@ mod proxyctl_tests {
 }
 
 mod proxyconfig_tests {
-    use super::*;
-
     #[test]
     #[cfg(target_os = "android")]
     fn test_proxyconfig_help() {
@@ -161,8 +155,6 @@ mod proxyconfig_tests {
 }
 
 mod verification_tests {
-    use super::*;
-
     #[test]
     fn test_binary_exists() {
         let bin = get_tseed_path();

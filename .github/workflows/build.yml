@@ -82,6 +82,8 @@ jobs:
 
       - name: Test TSEED (unit tests)
         working-directory: tsee/tseed
+        env:
+          RUSTFLAGS: -A unused_imports -A dead_code
         run: cargo test
 
       - uses: actions/upload-artifact@v4
