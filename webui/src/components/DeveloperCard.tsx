@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useApp } from '../contexts/AppContext'
-import { TSeed, showToast } from '../services/tseed'
+import { TSeed } from '../services/tseed'
 import { Bug, Play, Square, RefreshCw, Terminal } from 'lucide-react'
 
 export function DeveloperCard() {
   const { colors } = useTheme()
-  const { state, setState } = useApp()
+  const { state } = useApp()
   const [loading, setLoading] = useState(false)
   const [rawState, setRawState] = useState('')
 

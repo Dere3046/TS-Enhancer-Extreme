@@ -73,7 +73,9 @@ export function requestFullScreen(full: boolean) {
 
 export const TSeed = {
   async exec(namespace: string, action: string, ...args: string[]): Promise<string> {
-    const argStr = args.length > 0 ? ` ${args.join(' ')}` : ''
+    const argStr = args.length > 0
+      ? ' ' + args.map(a => `"${a.replace(/"/g, '\\"')}"`).join(' ')
+      : ''
     return execShell(`${TSEED_BIN} ${namespace} ${action}${argStr}`)
   },
 
