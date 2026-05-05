@@ -1,3 +1,5 @@
+#![allow(unused_imports, dead_code)]
+
 use std::process::Command;
 
 fn get_tseed_path() -> String {
