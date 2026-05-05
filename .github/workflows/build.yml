@@ -82,7 +82,7 @@ jobs:
 
       - name: Test TSEED (unit tests)
         working-directory: tsee/tseed
-        run: cargo test --lib
+        run: cargo test
 
       - uses: actions/upload-artifact@v4
         with:
