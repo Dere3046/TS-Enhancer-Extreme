@@ -46,20 +46,30 @@ function NavCard({ title, subtitle, onClick }: NavCardProps) {
 
 interface NavCardsProps {
   hasKeybox?: boolean
-  onTargetClick?: () => void
   onKeyboxClick?: () => void
 }
 
-export function NavCards({ hasKeybox = false, onTargetClick, onKeyboxClick }: NavCardsProps) {
+export function NavCards({ hasKeybox = false, onKeyboxClick }: NavCardsProps) {
   const { t } = useI18n()
+  const { colors } = useTheme()
 
   return (
     <div className="grid grid-cols-2 gap-4">
-      <NavCard
-        title={t('card.home.app_management')}
-        subtitle={t('card.home.app_management')}
-        onClick={onTargetClick}
-      />
+      <div
+        className="rounded-3xl p-6 text-left opacity-50"
+        style={{ backgroundColor: colors.surfaceContainerLow }}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-base font-semibold" style={{ color: colors.onSurfaceVariant }}>
+              {t('card.home.app_management')}
+            </h3>
+            <p className="text-sm mt-0.5" style={{ color: colors.onSurfaceVariant, opacity: 0.7 }}>
+              等待TSEED更新
+            </p>
+          </div>
+        </div>
+      </div>
       <NavCard
         title={t('card.home.keybox_management')}
         subtitle={hasKeybox ? t('keybox.exists') : t('keybox.not_found')}

@@ -11,14 +11,14 @@ import { DeveloperCard } from './components/DeveloperCard'
 import { BottomNav } from './components/BottomNav'
 import { SettingsPage } from './components/SettingsPage'
 import { LogsPage } from './components/LogsPage'
-import { TargetPage } from './components/TargetPage'
+// TargetPage removed - waiting for TSEED update
 import { KeyboxPage } from './components/KeyboxPage'
 import { ToolPage } from './components/ToolPage'
 import { AboutPage } from './components/AboutPage'
 import { loadSettings, saveSettings } from './utils/settings'
 import { useTheme } from './contexts/ThemeContext'
 
-type PageType = 'home' | 'settings' | 'logs' | 'target' | 'keybox' | 'tool' | 'about'
+type PageType = 'home' | 'settings' | 'logs' | 'keybox' | 'tool' | 'about'
 
 function HomePage({ onNavigate }: { onNavigate: (page: PageType) => void }) {
   const { state } = useApp()
@@ -28,7 +28,6 @@ function HomePage({ onNavigate }: { onNavigate: (page: PageType) => void }) {
       <StatusCard />
       <NavCards
         hasKeybox={state.hasKeybox}
-        onTargetClick={() => onNavigate('target')}
         onKeyboxClick={() => onNavigate('keybox')}
       />
       <DeviceInfoCard
@@ -49,9 +48,6 @@ function AppContent() {
   const [navigationMode, setNavigationMode] = useState<'bottom' | 'floating'>(
     () => loadSettings().navigationMode ?? 'bottom'
   )
-  const [targetSearch, setTargetSearch] = useState('')
-  const [showSystemApps, setShowSystemApps] = useState(false)
-  const [blacklistMode, setBlacklistMode] = useState(false)
   const [keyboxRefreshKey, setKeyboxRefreshKey] = useState(0)
 
   const handleBack = () => (currentPage === 'logs' ? setCurrentPage('tool') : setCurrentPage('home'))
@@ -59,7 +55,6 @@ function AppContent() {
   const renderPage = () => {
     switch (currentPage) {
       case 'home': return <HomePage onNavigate={setCurrentPage} />
-      case 'target': return <TargetPage searchText={targetSearch} showSystemApps={showSystemApps} blacklistMode={blacklistMode} onBlacklistModeChange={setBlacklistMode} />
       case 'keybox': return <KeyboxPage key={keyboxRefreshKey} />
       case 'settings':
         return <SettingsPage navigationMode={navigationMode} onNavigationModeChange={m => { setNavigationMode(m); saveSettings({ navigationMode: m }) }} />
@@ -71,7 +66,7 @@ function AppContent() {
   }
 
   const getNavPage = (): string => {
-    if (currentPage === 'target' || currentPage === 'keybox') return 'home'
+    if (currentPage === 'keybox') return 'home'
     if (currentPage === 'logs') return 'tool'
     if (currentPage === 'about') return 'settings'
     return currentPage
@@ -84,13 +79,7 @@ function AppContent() {
         onBack={handleBack}
         onNavigate={(page) => setCurrentPage(page)}
         navigationMode={navigationMode}
-        searchText={targetSearch}
-        onSearchChange={setTargetSearch}
-        showSystemApps={showSystemApps}
-        onShowSystemAppsChange={setShowSystemApps}
         onKeyboxRefresh={() => setKeyboxRefreshKey(k => k + 1)}
-        blacklistMode={blacklistMode}
-        onBlacklistModeChange={setBlacklistMode}
       />
       <main className="max-w-2xl mx-auto px-4 py-6">
         {renderPage()}

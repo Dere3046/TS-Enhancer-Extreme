@@ -1,22 +1,16 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useI18n } from '../contexts/I18nContext'
-import { Globe, Sun, Moon, Search, MoreVertical, ArrowLeft, X, Check, Settings, Wrench, Info, RefreshCw } from 'lucide-react'
+import { Globe, Sun, Moon, MoreVertical, ArrowLeft, Settings, Wrench, Info, RefreshCw } from 'lucide-react'
 
-type PageType = 'home' | 'settings' | 'logs' | 'target' | 'keybox' | 'tool' | 'about'
+type PageType = 'home' | 'settings' | 'logs' | 'keybox' | 'tool' | 'about'
 
 export interface AppBarProps {
   currentPage: PageType
   onBack?: () => void
   onNavigate?: (page: PageType) => void
   navigationMode?: 'bottom' | 'floating'
-  searchText?: string
-  onSearchChange?: (v: string) => void
-  showSystemApps?: boolean
-  onShowSystemAppsChange?: (v: boolean) => void
   onKeyboxRefresh?: () => void
-  blacklistMode?: boolean
-  onBlacklistModeChange?: (v: boolean) => void
 }
 
 export function AppBar({
@@ -24,33 +18,22 @@ export function AppBar({
   onBack,
   onNavigate,
   navigationMode = 'bottom',
-  searchText = '',
-  onSearchChange,
-  showSystemApps = false,
-  onShowSystemAppsChange,
   onKeyboxRefresh,
-  blacklistMode = false,
-  onBlacklistModeChange,
 }: AppBarProps) {
   const { colors, isDark, toggleDark } = useTheme()
   const { lang, setLang, t, availableLangs } = useI18n()
   const [showLangMenu, setShowLangMenu] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const isTarget = currentPage === 'target'
   const isKeybox = currentPage === 'keybox'
   const isHome = currentPage === 'home'
-  const showSearch = isTarget
-  const showMore = isTarget || isKeybox
+  const showMore = isKeybox
   const showBack = navigationMode === 'bottom'
     ? (!isHome && currentPage !== 'settings' && currentPage !== 'tool')
     : !isHome
 
   const titles: Record<string, string> = {
     home: 'TS-Enhancer-Extreme',
-    target: t('target.title'),
     keybox: t('keybox.title'),
     settings: t('nav.settings'),
     logs: t('logs.title'),
@@ -60,13 +43,7 @@ export function AppBar({
   const title = titles[currentPage] || 'TS-Enhancer-Extreme'
 
   useEffect(() => {
-    if (isSearching && searchInputRef.current) {
-      searchInputRef.current.focus()
-    }
-  }, [isSearching])
-
-  useEffect(() => {
-    setIsSearching(false)
+    setShowMoreMenu(false)
   }, [currentPage])
 
   return (
@@ -85,50 +62,14 @@ export function AppBar({
             </button>
           )}
           <div className="flex-1 min-w-0 relative h-10 flex items-center">
-            {/* Title */}
             <h1
-              className={`text-xl font-bold absolute inset-0 flex items-center transition-opacity duration-200 ${isSearching ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+              className="text-xl font-bold flex items-center"
               style={{ color: colors.onSurface }}
             >
               <span className="truncate">{title}</span>
             </h1>
-            {showSearch && (
-              <div
-                className={`absolute inset-0 flex items-center transition-opacity duration-200 ${isSearching ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              >
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchText}
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                  placeholder={t('target.search')}
-                  className="w-full h-10 px-3 rounded-xl text-sm outline-none border"
-                  style={{
-                    backgroundColor: colors.surfaceContainerHighest,
-                    borderColor: colors.outlineVariant,
-                    color: colors.onSurface,
-                  }}
-                />
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            {showSearch && !isSearching && (
-              <button
-                onClick={() => { setIsSearching(true); setShowMoreMenu(false) }}
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-              >
-                <Search className="w-5 h-5" style={{ color: colors.onSurfaceVariant }} />
-              </button>
-            )}
-            {showSearch && isSearching && (
-              <button
-                onClick={() => { setIsSearching(false); onSearchChange?.('') }}
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-              >
-                <X className="w-5 h-5" style={{ color: colors.onSurfaceVariant }} />
-              </button>
-            )}
             {showMore && (
               <div className="relative">
                 <button
@@ -143,42 +84,6 @@ export function AppBar({
                     className="absolute right-0 top-12 w-52 py-2 rounded-xl shadow-lg z-50"
                     style={{ backgroundColor: colors.surfaceContainerHigh }}
                   >
-                    {isTarget && (
-                      <>
-                        <button
-                          onClick={() => { onShowSystemAppsChange?.(!showSystemApps); setShowMoreMenu(false) }}
-                          className="w-full px-4 py-2.5 text-left text-sm flex items-center justify-between"
-                          style={{ color: colors.onSurface }}
-                        >
-                          <span>{t('target.show_system_apps')}</span>
-                          <span
-                            className="w-4 h-4 rounded border flex items-center justify-center"
-                            style={{
-                              borderColor: colors.primary,
-                              backgroundColor: showSystemApps ? colors.primary : 'transparent',
-                            }}
-                          >
-                            {showSystemApps && <Check className="w-3 h-3" style={{ color: colors.onPrimary }} />}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => { onBlacklistModeChange?.(!blacklistMode); setShowMoreMenu(false) }}
-                          className="w-full px-4 py-2.5 text-left text-sm flex items-center justify-between"
-                          style={{ color: colors.onSurface }}
-                        >
-                          <span>{t('target.blacklist_mode')}</span>
-                          <span
-                            className="w-4 h-4 rounded border flex items-center justify-center"
-                            style={{
-                              borderColor: colors.primary,
-                              backgroundColor: blacklistMode ? colors.primary : 'transparent',
-                            }}
-                          >
-                            {blacklistMode && <Check className="w-3 h-3" style={{ color: colors.onPrimary }} />}
-                          </span>
-                        </button>
-                      </>
-                    )}
                     {isKeybox && (
                       <button
                         onClick={() => { onKeyboxRefresh?.(); setShowMoreMenu(false) }}
