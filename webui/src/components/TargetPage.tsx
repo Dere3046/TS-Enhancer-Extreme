@@ -9,17 +9,19 @@ interface AppEntry {
   isSystem: boolean
 }
 
-interface AppItemProps {
-  app: AppEntry
-  checked: boolean
-  disabled: boolean
-  colors: ReturnType<typeof useTheme>['colors']
-  onToggle: (pkg: string, isSystem: boolean) => void
-}
-
 const BATCH_SIZE = 10
 
-const AppItem = memo(function AppItem({ app, checked, disabled, colors, onToggle }: AppItemProps) {
+const AppItem = memo(function AppItem({
+  app,
+  checked,
+  colors,
+  onToggle,
+}: {
+  app: AppEntry
+  checked: boolean
+  colors: ReturnType<typeof useTheme>['colors']
+  onToggle: (pkg: string, isSystem: boolean) => void
+}) {
   const iconRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
@@ -30,7 +32,7 @@ const AppItem = memo(function AppItem({ app, checked, disabled, colors, onToggle
   return (
     <div
       className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-      style={{ backgroundColor: colors.surfaceContainerLow, opacity: disabled ? 0.6 : 1 }}
+      style={{ backgroundColor: colors.surfaceContainerLow }}
     >
       <img
         ref={iconRef}
@@ -65,11 +67,11 @@ const AppItem = memo(function AppItem({ app, checked, disabled, colors, onToggle
       </div>
 
       <button
-        onClick={() => !disabled && onToggle(app.packageName, app.isSystem)}
+        onClick={() => onToggle(app.packageName, app.isSystem)}
         className="relative w-11 h-6 rounded-full transition-colors shrink-0"
         style={{
           backgroundColor: checked ? colors.primary : colors.surfaceContainerHighest,
-          cursor: disabled ? 'not-allowed' : 'pointer',
+          cursor: 'pointer',
         }}
       >
         <span
@@ -100,51 +102,37 @@ async function delay(ms: number) {
 async function getAppLabel(packageName: string): Promise<string> {
   const ksu = (window as any).ksu
   if (!ksu || typeof ksu.getPackagesInfo !== 'function') return packageName
-
   try {
     const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
-    if (info && info[0] && info[0].appLabel) {
-      return info[0].appLabel.trim()
-    }
+    if (info && info[0] && info[0].appLabel) return info[0].appLabel.trim()
   } catch { /* ignore */ }
-
   return packageName
 }
 
 async function processPackagesBatch(packages: string[], isSystem: boolean): Promise<AppEntry[]> {
   const entries: AppEntry[] = []
-
   for (let i = 0; i < packages.length; i += BATCH_SIZE) {
     const batch = packages.slice(i, i + BATCH_SIZE)
-    const batchPromises = batch.map(pkg => getAppLabel(pkg))
-    const batchResults = await Promise.all(batchPromises)
-
+    const results = await Promise.all(batch.map(pkg => getAppLabel(pkg)))
     for (let j = 0; j < batch.length; j++) {
-      entries.push({
-        packageName: batch[j].trim(),
-        appName: batchResults[j] || batch[j].trim(),
-        isSystem,
-      })
+      entries.push({ packageName: batch[j].trim(), appName: results[j] || batch[j].trim(), isSystem })
     }
-
     await delay(10)
   }
-
   return entries
 }
 
 async function fetchPackagesNative(): Promise<{ user: string[]; system: string[] } | null> {
   const ksu = (window as any).ksu
   if (!ksu) return null
-
   try {
     if (typeof ksu.listUserPackages === 'function' && typeof ksu.listSystemPackages === 'function') {
-      const userPkgs = JSON.parse(ksu.listUserPackages() || '[]')
-      const systemPkgs = JSON.parse(ksu.listSystemPackages() || '[]')
-      return { user: userPkgs, system: systemPkgs }
+      return {
+        user: JSON.parse(ksu.listUserPackages() || '[]'),
+        system: JSON.parse(ksu.listSystemPackages() || '[]'),
+      }
     }
   } catch { /* ignore */ }
-
   return null
 }
 
@@ -153,158 +141,155 @@ async function fetchPackagesPM(): Promise<{ user: string[]; system: string[] }> 
     TSeed.pm.listThirdParty(),
     TSeed.pm.listSystem(),
   ])
-
-  const user = thirdRaw.split('\n').map(l => l.replace('package:', '').trim()).filter(Boolean)
-  const system = sysRaw.split('\n').map(l => l.replace('package:', '').trim()).filter(Boolean)
-
-  return { user, system }
+  return {
+    user: thirdRaw.split('\n').map(l => l.replace('package:', '').trim()).filter(Boolean),
+    system: sysRaw.split('\n').map(l => l.replace('package:', '').trim()).filter(Boolean),
+  }
 }
 
 export function TargetPage({ searchText = '', showSystemApps = false, blacklistMode = false, onBlacklistModeChange }: TargetPageProps) {
   const { colors } = useTheme()
   const { t } = useI18n()
   const [allApps, setAllApps] = useState<AppEntry[]>([])
-  const [thirdPartyList, setThirdPartyList] = useState<string[]>([])
-  const [systemList, setSystemList] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingProgress, setLoadingProgress] = useState(0)
-  const [loadingText, setLoadingText] = useState('')
+  const [progress, setProgress] = useState(0)
+  const [progressText, setProgressText] = useState('')
+  const [, tick] = useState(0)
+
+  // use Set in ref to avoid re-render on toggle
+  const thirdRef = useRef<Set<string>>(new Set())
+  const systemRef = useRef<Set<string>>(new Set())
 
   const search = searchText
   const showSystem = showSystemApps
 
-  const loadConfig = useCallback(async () => {
-    try {
-      const [usr, sys, bl] = await Promise.all([
-        TSeed.file.read(Paths.USR_TXT).catch(() => ''),
-        TSeed.file.read(Paths.SYS_TXT).catch(() => ''),
-        TSeed.file.exists(Paths.BLACKLIST).catch(() => 'not exists'),
-      ])
-      setThirdPartyList(usr.split('\n').map(s => s.trim()).filter(Boolean))
-      setSystemList(sys.split('\n').map(s => s.trim()).filter(Boolean))
-      onBlacklistModeChange?.(bl.trim() === 'exists')
-    } catch { /* ignore */ }
+  // load config once
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [usr, sys, bl] = await Promise.all([
+          TSeed.file.read(Paths.USR_TXT).catch(() => ''),
+          TSeed.file.read(Paths.SYS_TXT).catch(() => ''),
+          TSeed.file.exists(Paths.BLACKLIST).catch(() => 'not exists'),
+        ])
+        if (cancelled) return
+        thirdRef.current = new Set(usr.split('\n').map(s => s.trim()).filter(Boolean))
+        systemRef.current = new Set(sys.split('\n').map(s => s.trim()).filter(Boolean))
+        onBlacklistModeChange?.(bl.trim() === 'exists')
+      } catch { /* ignore */ }
+    }
+    load()
+    return () => { cancelled = true }
   }, [onBlacklistModeChange])
 
-  const fetchApps = useCallback(async () => {
-    if (appCache) {
-      setAllApps(appCache)
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setLoadingProgress(10)
-    setLoadingText(t('target.loading_init') || 'Initializing...')
-    await delay(100)
-
-    try {
-      let userPkgs: string[] = []
-      let systemPkgs: string[] = []
-
-      setLoadingProgress(20)
-      setLoadingText(t('target.fetching_apps') || 'Fetching app list...')
-
-      const nativeResult = await fetchPackagesNative()
-      if (nativeResult) {
-        userPkgs = nativeResult.user
-        systemPkgs = nativeResult.system
-      } else {
-        const pmResult = await fetchPackagesPM()
-        userPkgs = pmResult.user
-        systemPkgs = pmResult.system
+  // fetch apps once
+  useEffect(() => {
+    let cancelled = false
+    const fetch = async () => {
+      if (appCache) {
+        setAllApps(appCache)
+        setLoading(false)
+        return
       }
 
-      setLoadingProgress(40)
-      setLoadingText(t('target.processing_apps') || 'Processing apps...')
+      setLoading(true)
+      setProgress(10)
+      setProgressText(t('target.loading_init') || 'Initializing...')
+      await delay(100)
 
-      const userEntries = await processPackagesBatch(userPkgs, false)
-      setLoadingProgress(60)
-      setLoadingText(t('target.processing_system') || 'Processing system apps...')
+      try {
+        let userPkgs: string[] = []
+        let systemPkgs: string[] = []
 
-      const systemEntries = await processPackagesBatch(systemPkgs, true)
-      setLoadingProgress(80)
-      setLoadingText(t('target.finishing') || 'Finishing...')
+        setProgress(20)
+        setProgressText(t('target.fetching_apps') || 'Fetching app list...')
 
-      const entries = [...userEntries, ...systemEntries]
-      appCache = entries
-      setAllApps(entries)
+        const native = await fetchPackagesNative()
+        if (native) {
+          userPkgs = native.user
+          systemPkgs = native.system
+        } else {
+          const pm = await fetchPackagesPM()
+          userPkgs = pm.user
+          systemPkgs = pm.system
+        }
 
-      await delay(300)
-      setLoadingProgress(100)
-      setLoadingText(t('target.complete') || 'Complete')
-      await delay(200)
-      setLoading(false)
-    } catch (e) {
-      console.error('fetch apps failed:', e)
-      setLoading(false)
+        setProgress(40)
+        setProgressText(t('target.processing_apps') || 'Processing apps...')
+        const userEntries = await processPackagesBatch(userPkgs, false)
+
+        setProgress(60)
+        setProgressText(t('target.processing_system') || 'Processing system apps...')
+        const systemEntries = await processPackagesBatch(systemPkgs, true)
+
+        const entries = [...userEntries, ...systemEntries]
+        appCache = entries
+        if (!cancelled) {
+          setAllApps(entries)
+          setProgress(100)
+          setProgressText(t('target.complete') || 'Complete')
+          await delay(200)
+          setLoading(false)
+        }
+      } catch (e) {
+        console.error('fetch apps failed:', e)
+        if (!cancelled) setLoading(false)
+      }
     }
+    fetch()
+    return () => { cancelled = true }
   }, [t])
 
   useEffect(() => {
-    loadConfig()
-    fetchApps()
-  }, [loadConfig, fetchApps])
-
-  useEffect(() => {
-    return () => {
-      appCache = null
-    }
+    return () => { appCache = null }
   }, [])
 
   const getChecked = useCallback((pkg: string, isSystem: boolean) => {
     if (isSystem) {
-      const inSystemList = systemList.includes(pkg)
-      return blacklistMode ? !inSystemList : inSystemList
-    } else {
-      const inThirdPartyList = thirdPartyList.includes(pkg)
-      return blacklistMode ? inThirdPartyList : !inThirdPartyList
+      return blacklistMode ? !systemRef.current.has(pkg) : systemRef.current.has(pkg)
     }
-  }, [systemList, thirdPartyList, blacklistMode])
-
-  const getDisabled = useCallback(() => {
-    return false
-  }, [])
+    return blacklistMode ? thirdRef.current.has(pkg) : !thirdRef.current.has(pkg)
+  }, [blacklistMode])
 
   const handleToggle = useCallback((pkg: string, isSystem: boolean) => {
     if (isSystem) {
-      setSystemList(prev => {
-        const inList = prev.includes(pkg)
-        return inList ? prev.filter(p => p !== pkg) : [...prev, pkg]
-      })
+      const set = systemRef.current
+      if (set.has(pkg)) set.delete(pkg)
+      else set.add(pkg)
     } else {
-      setThirdPartyList(prev => {
-        const inList = prev.includes(pkg)
-        return inList ? prev.filter(p => p !== pkg) : [...prev, pkg]
-      })
+      const set = thirdRef.current
+      if (set.has(pkg)) set.delete(pkg)
+      else set.add(pkg)
     }
+    tick(v => v + 1)
   }, [])
 
-  const lastSaveTimeRef = useRef(0)
+  // auto save
+  const lastSaveRef = useRef(0)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const doSave = useCallback(async () => {
     const now = Date.now()
-    if (now - lastSaveTimeRef.current < 500) {
+    if (now - lastSaveRef.current < 500) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => doSave(), 1000)
       return
     }
-
     try {
-      await TSeed.file.write(Paths.USR_TXT, thirdPartyList.join('\n'))
-      await TSeed.file.write(Paths.SYS_TXT, systemList.join('\n'))
+      await TSeed.file.write(Paths.USR_TXT, [...thirdRef.current].join('\n'))
+      await TSeed.file.write(Paths.SYS_TXT, [...systemRef.current].join('\n'))
       if (blacklistMode) {
         await TSeed.file.touch(Paths.BLACKLIST)
       } else {
         await TSeed.file.rm(Paths.BLACKLIST)
       }
       TSeed.packagelistupdate().catch(() => {})
-      lastSaveTimeRef.current = Date.now()
+      lastSaveRef.current = Date.now()
     } catch (e) {
       console.error('save failed:', e)
     }
-  }, [thirdPartyList, systemList, blacklistMode])
+  }, [blacklistMode])
 
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -312,8 +297,9 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
-  }, [thirdPartyList, systemList, blacklistMode, doSave])
+  }, [doSave])
 
+  // stable filtered list (alpha order, no re-sort on toggle)
   const filtered = useMemo(() => {
     let list = allApps.filter(app => showSystem || !app.isSystem)
 
@@ -325,44 +311,27 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
       )
     }
 
-    list.sort((a, b) => {
-      if (a.isSystem !== b.isSystem) {
-        return a.isSystem ? 1 : -1
-      }
-
-      const aChecked = getChecked(a.packageName, a.isSystem)
-      const bChecked = getChecked(b.packageName, b.isSystem)
-
-      if (!a.isSystem && !b.isSystem) {
-        if (blacklistMode) {
-          if (aChecked !== bChecked) return aChecked ? -1 : 1
-        } else {
-          if (aChecked !== bChecked) return aChecked ? 1 : -1
-        }
-      } else {
-        if (aChecked !== bChecked) return aChecked ? -1 : 1
-      }
-
-      return (a.appName || a.packageName || '').localeCompare(b.appName || b.packageName || '')
-    })
+    // stable alpha sort, never changes on toggle
+    list.sort((a, b) =>
+      (a.appName || a.packageName || '').localeCompare(b.appName || b.packageName || '')
+    )
 
     return list
-  }, [allApps, showSystem, search, blacklistMode, getChecked])
+  }, [allApps, showSystem, search])
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-full max-w-xs h-2 rounded-full overflow-hidden" style={{ backgroundColor: colors.surfaceContainerHighest }}>
+        <div className="w-full max-w-xs h-2 rounded-full overflow-hidden"
+          style={{ backgroundColor: colors.surfaceContainerHighest }}
+        >
           <div
             className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${loadingProgress}%`,
-              backgroundColor: colors.primary,
-            }}
+            style={{ width: `${progress}%`, backgroundColor: colors.primary }}
           />
         </div>
         <p className="text-sm" style={{ color: colors.onSurfaceVariant }}>
-          {loadingText} ({loadingProgress}%)
+          {progressText} ({progress}%)
         </p>
       </div>
     )
@@ -375,19 +344,15 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
           {t('target.no_results')}
         </div>
       ) : (
-        <>
-          {filtered.map((app) => (
-            <div key={app.packageName}>
-              <AppItem
-                app={app}
-                checked={getChecked(app.packageName, app.isSystem)}
-                disabled={getDisabled()}
-                colors={colors}
-                onToggle={handleToggle}
-              />
-            </div>
-          ))}
-        </>
+        filtered.map((app) => (
+          <AppItem
+            key={app.packageName}
+            app={app}
+            checked={getChecked(app.packageName, app.isSystem)}
+            colors={colors}
+            onToggle={handleToggle}
+          />
+        ))
       )}
     </div>
   )
