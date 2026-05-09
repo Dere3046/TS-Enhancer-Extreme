@@ -102,11 +102,18 @@ async function delay(ms: number) {
 async function getAppLabel(packageName: string): Promise<string> {
   const ksu = (window as any).ksu
   if (!ksu || typeof ksu.getPackagesInfo !== 'function') return packageName
-  try {
-    const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
-    if (info && info[0] && info[0].appLabel) return info[0].appLabel.trim()
-  } catch { /* ignore */ }
-  return packageName
+
+  const timeout = new Promise<string>(resolve => setTimeout(() => resolve(packageName), 500))
+
+  const fetch = (async () => {
+    try {
+      const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
+      if (info && info[0] && info[0].appLabel) return info[0].appLabel.trim()
+    } catch { /* ignore */ }
+    return packageName
+  })()
+
+  return Promise.race([fetch, timeout])
 }
 
 async function processPackagesBatch(packages: string[], isSystem: boolean): Promise<AppEntry[]> {
