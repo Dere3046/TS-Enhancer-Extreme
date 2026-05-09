@@ -17,6 +17,8 @@ interface AppItemProps {
   onToggle: (pkg: string, isSystem: boolean) => void
 }
 
+const BATCH_SIZE = 10
+
 const AppItem = memo(function AppItem({ app, checked, disabled, colors, onToggle }: AppItemProps) {
   const iconRef = useRef<HTMLImageElement>(null)
 
@@ -91,6 +93,46 @@ interface TargetPageProps {
 
 let appCache: AppEntry[] | null = null
 
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function getAppLabel(packageName: string): Promise<string> {
+  const ksu = (window as any).ksu
+  if (!ksu || typeof ksu.getPackagesInfo !== 'function') return packageName
+
+  try {
+    const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
+    if (info && info[0] && info[0].appLabel) {
+      return info[0].appLabel.trim()
+    }
+  } catch { /* ignore */ }
+
+  return packageName
+}
+
+async function processPackagesBatch(packages: string[], isSystem: boolean): Promise<AppEntry[]> {
+  const entries: AppEntry[] = []
+
+  for (let i = 0; i < packages.length; i += BATCH_SIZE) {
+    const batch = packages.slice(i, i + BATCH_SIZE)
+    const batchPromises = batch.map(pkg => getAppLabel(pkg))
+    const batchResults = await Promise.all(batchPromises)
+
+    for (let j = 0; j < batch.length; j++) {
+      entries.push({
+        packageName: batch[j].trim(),
+        appName: batchResults[j] || batch[j].trim(),
+        isSystem,
+      })
+    }
+
+    await delay(10)
+  }
+
+  return entries
+}
+
 async function fetchPackagesNative(): Promise<{ user: string[]; system: string[] } | null> {
   const ksu = (window as any).ksu
   if (!ksu) return null
@@ -100,20 +142,6 @@ async function fetchPackagesNative(): Promise<{ user: string[]; system: string[]
       const userPkgs = JSON.parse(ksu.listUserPackages() || '[]')
       const systemPkgs = JSON.parse(ksu.listSystemPackages() || '[]')
       return { user: userPkgs, system: systemPkgs }
-    }
-  } catch { /* ignore */ }
-
-  return null
-}
-
-async function getAppLabel(packageName: string): Promise<string | null> {
-  const ksu = (window as any).ksu
-  if (!ksu || typeof ksu.getPackagesInfo !== 'function') return null
-
-  try {
-    const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
-    if (info && info[0] && info[0].appLabel) {
-      return info[0].appLabel
     }
   } catch { /* ignore */ }
 
@@ -139,6 +167,8 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
   const [thirdPartyList, setThirdPartyList] = useState<string[]>([])
   const [systemList, setSystemList] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [loadingText, setLoadingText] = useState('')
 
   const search = searchText
   const showSystem = showSystemApps
@@ -164,36 +194,52 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
     }
 
     setLoading(true)
-    try {
-      let nativeResult = await fetchPackagesNative()
-      let { user: userPkgs, system: sysPkgs } = nativeResult || { user: [], system: [] }
+    setLoadingProgress(10)
+    setLoadingText(t('target.loading_init') || 'Initializing...')
+    await delay(100)
 
-      if (userPkgs.length === 0 && sysPkgs.length === 0) {
+    try {
+      let userPkgs: string[] = []
+      let systemPkgs: string[] = []
+
+      setLoadingProgress(20)
+      setLoadingText(t('target.fetching_apps') || 'Fetching app list...')
+
+      const nativeResult = await fetchPackagesNative()
+      if (nativeResult) {
+        userPkgs = nativeResult.user
+        systemPkgs = nativeResult.system
+      } else {
         const pmResult = await fetchPackagesPM()
         userPkgs = pmResult.user
-        sysPkgs = pmResult.system
+        systemPkgs = pmResult.system
       }
 
-      const entries: AppEntry[] = []
+      setLoadingProgress(40)
+      setLoadingText(t('target.processing_apps') || 'Processing apps...')
 
-      for (const pkg of userPkgs) {
-        const label = await getAppLabel(pkg)
-        entries.push({ packageName: pkg, appName: label || pkg, isSystem: false })
-      }
+      const userEntries = await processPackagesBatch(userPkgs, false)
+      setLoadingProgress(60)
+      setLoadingText(t('target.processing_system') || 'Processing system apps...')
 
-      for (const pkg of sysPkgs) {
-        const label = await getAppLabel(pkg)
-        entries.push({ packageName: pkg, appName: label || pkg, isSystem: true })
-      }
+      const systemEntries = await processPackagesBatch(systemPkgs, true)
+      setLoadingProgress(80)
+      setLoadingText(t('target.finishing') || 'Finishing...')
 
+      const entries = [...userEntries, ...systemEntries]
       appCache = entries
       setAllApps(entries)
+
+      await delay(300)
+      setLoadingProgress(100)
+      setLoadingText(t('target.complete') || 'Complete')
+      await delay(200)
+      setLoading(false)
     } catch (e) {
       console.error('fetch apps failed:', e)
-    } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadConfig()
@@ -305,9 +351,19 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-6 h-6 border-2 rounded-full animate-spin"
-          style={{ borderColor: colors.primaryContainer, borderTopColor: colors.primary }} />
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-full max-w-xs h-2 rounded-full overflow-hidden" style={{ backgroundColor: colors.surfaceContainerHighest }}>
+          <div
+            className="h-full rounded-full transition-all duration-300"
+            style={{
+              width: `${loadingProgress}%`,
+              backgroundColor: colors.primary,
+            }}
+          />
+        </div>
+        <p className="text-sm" style={{ color: colors.onSurfaceVariant }}>
+          {loadingText} ({loadingProgress}%)
+        </p>
       </div>
     )
   }

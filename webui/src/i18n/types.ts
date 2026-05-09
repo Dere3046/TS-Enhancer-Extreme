@@ -69,6 +69,12 @@ export interface I18nDict {
   'target.excluded': string
   'target.total': string
   'target.total_suffix': string
+  'target.loading_init': string
+  'target.fetching_apps': string
+  'target.processing_apps': string
+  'target.processing_system': string
+  'target.finishing': string
+  'target.complete': string
 
   // Keybox
   'keybox.title': string

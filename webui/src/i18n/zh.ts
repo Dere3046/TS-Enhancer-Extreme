@@ -67,6 +67,12 @@ const dict: I18nDict = {
   'target.excluded': '已排除',
   'target.total': '共',
   'target.total_suffix': '个',
+  'target.loading_init': '正在初始化...',
+  'target.fetching_apps': '正在获取应用列表...',
+  'target.processing_apps': '正在处理应用信息...',
+  'target.processing_system': '正在处理系统应用...',
+  'target.finishing': '正在完成加载...',
+  'target.complete': '加载完成',
 
   // Keybox
   'keybox.title': 'Keybox 管理',

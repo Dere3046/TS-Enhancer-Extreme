@@ -67,6 +67,12 @@ const dict: I18nDict = {
   'target.excluded': 'Excluded',
   'target.total': 'Total',
   'target.total_suffix': 'apps',
+  'target.loading_init': 'Initializing...',
+  'target.fetching_apps': 'Fetching app list...',
+  'target.processing_apps': 'Processing apps...',
+  'target.processing_system': 'Processing system apps...',
+  'target.finishing': 'Finishing...',
+  'target.complete': 'Complete',
 
   // Keybox
   'keybox.title': 'Keybox Management',
