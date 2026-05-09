@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useI18n } from '../contexts/I18nContext'
-import { TSeed, Paths } from '../services/tseed'
+import { TSeed, Paths, execShell } from '../services/tseed'
 import { debugLog, forceFlush } from '../utils/debug'
 
 interface AppEntry {
@@ -101,9 +101,6 @@ async function delay(ms: number) {
 }
 
 async function getAppLabel(packageName: string, batchIdx: number, pkgIdx: number): Promise<string> {
-  const ksu = (window as any).ksu
-  if (!ksu || typeof ksu.getPackagesInfo !== 'function') return packageName
-
   const t0 = Date.now()
   debugLog('LABEL_START', { pkg: packageName, batch: batchIdx, idx: pkgIdx })
 
@@ -114,10 +111,11 @@ async function getAppLabel(packageName: string, batchIdx: number, pkgIdx: number
 
   const fetch = (async () => {
     try {
-      const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
-      if (info && info[0] && info[0].appLabel) {
-        debugLog('LABEL_OK', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0, label: info[0].appLabel.trim() })
-        return info[0].appLabel.trim()
+      const stdout = await execShell(`pm dump "${packageName}" | grep "Application Label:" | head -n 1`)
+      const label = stdout.split('Application Label:')[1]?.trim()
+      if (label) {
+        debugLog('LABEL_OK', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0, label })
+        return label
       }
     } catch (e) {
       debugLog('LABEL_ERR', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0, err: String(e) })
