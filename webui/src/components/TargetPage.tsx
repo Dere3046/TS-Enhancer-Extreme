@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useI18n } from '../contexts/I18nContext'
 import { TSeed, Paths } from '../services/tseed'
+import { debugLog, forceFlush } from '../utils/debug'
 
 interface AppEntry {
   packageName: string
@@ -99,17 +100,28 @@ async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function getAppLabel(packageName: string): Promise<string> {
+async function getAppLabel(packageName: string, batchIdx: number, pkgIdx: number): Promise<string> {
   const ksu = (window as any).ksu
   if (!ksu || typeof ksu.getPackagesInfo !== 'function') return packageName
 
-  const timeout = new Promise<string>(resolve => setTimeout(() => resolve(packageName), 500))
+  const t0 = Date.now()
+  debugLog('LABEL_START', { pkg: packageName, batch: batchIdx, idx: pkgIdx })
+
+  const timeout = new Promise<string>(resolve => setTimeout(() => {
+    debugLog('LABEL_TIMEOUT', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0 })
+    resolve(packageName)
+  }, 500))
 
   const fetch = (async () => {
     try {
       const info = JSON.parse(ksu.getPackagesInfo(`["${packageName}"]`))
-      if (info && info[0] && info[0].appLabel) return info[0].appLabel.trim()
-    } catch { /* ignore */ }
+      if (info && info[0] && info[0].appLabel) {
+        debugLog('LABEL_OK', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0, label: info[0].appLabel.trim() })
+        return info[0].appLabel.trim()
+      }
+    } catch (e) {
+      debugLog('LABEL_ERR', { pkg: packageName, batch: batchIdx, idx: pkgIdx, dur: Date.now() - t0, err: String(e) })
+    }
     return packageName
   })()
 
@@ -118,14 +130,26 @@ async function getAppLabel(packageName: string): Promise<string> {
 
 async function processPackagesBatch(packages: string[], isSystem: boolean): Promise<AppEntry[]> {
   const entries: AppEntry[] = []
+  const totalBatches = Math.ceil(packages.length / BATCH_SIZE)
+  debugLog('BATCH_TOTAL', { isSystem, total: packages.length, batches: totalBatches })
+
   for (let i = 0; i < packages.length; i += BATCH_SIZE) {
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1
     const batch = packages.slice(i, i + BATCH_SIZE)
-    const results = await Promise.all(batch.map(pkg => getAppLabel(pkg)))
+    debugLog('BATCH_START', { isSystem, batch: batchNum, totalBatches, count: batch.length, pkgs: batch })
+    const t0 = Date.now()
+
+    const results = await Promise.all(batch.map((pkg, idx) => getAppLabel(pkg, batchNum, idx)))
+
     for (let j = 0; j < batch.length; j++) {
       entries.push({ packageName: batch[j].trim(), appName: results[j] || batch[j].trim(), isSystem })
     }
+
+    debugLog('BATCH_END', { isSystem, batch: batchNum, totalBatches, dur: Date.now() - t0, count: batch.length })
     await delay(10)
   }
+
+  debugLog('BATCH_ALL_DONE', { isSystem, total: entries.length })
   return entries
 }
 
@@ -212,27 +236,40 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
 
         setProgress(20)
         setProgressText(t('target.fetching_apps') || 'Fetching app list...')
+        debugLog('FETCH_START', { source: 'native|pm' })
+        const tFetch = Date.now()
 
         const native = await fetchPackagesNative()
         if (native) {
           userPkgs = native.user
           systemPkgs = native.system
+          debugLog('FETCH_NATIVE_OK', { user: userPkgs.length, system: systemPkgs.length, dur: Date.now() - tFetch })
         } else {
           const pm = await fetchPackagesPM()
           userPkgs = pm.user
           systemPkgs = pm.system
+          debugLog('FETCH_PM_OK', { user: userPkgs.length, system: systemPkgs.length, dur: Date.now() - tFetch })
         }
 
         setProgress(40)
         setProgressText(t('target.processing_apps') || 'Processing apps...')
+        debugLog('PROCESS_USER_START', { count: userPkgs.length })
+        const tUser = Date.now()
         const userEntries = await processPackagesBatch(userPkgs, false)
+        debugLog('PROCESS_USER_END', { count: userEntries.length, dur: Date.now() - tUser })
 
         setProgress(60)
         setProgressText(t('target.processing_system') || 'Processing system apps...')
+        debugLog('PROCESS_SYSTEM_START', { count: systemPkgs.length })
+        const tSystem = Date.now()
         const systemEntries = await processPackagesBatch(systemPkgs, true)
+        debugLog('PROCESS_SYSTEM_END', { count: systemEntries.length, dur: Date.now() - tSystem })
 
         const entries = [...userEntries, ...systemEntries]
         appCache = entries
+        debugLog('FETCH_DONE', { total: entries.length, user: userEntries.length, system: systemEntries.length })
+        await forceFlush()
+
         if (!cancelled) {
           setAllApps(entries)
           setProgress(100)
@@ -241,6 +278,8 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
           setLoading(false)
         }
       } catch (e) {
+        debugLog('FETCH_CATCH', { err: String(e) })
+        await forceFlush()
         console.error('fetch apps failed:', e)
         if (!cancelled) setLoading(false)
       }
