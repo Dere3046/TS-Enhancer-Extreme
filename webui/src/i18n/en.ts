@@ -73,6 +73,7 @@ const dict: I18nDict = {
   'target.processing_system': 'Processing system apps...',
   'target.finishing': 'Finishing...',
   'target.complete': 'Complete',
+  'target.loading_more': 'Loading more...',
 
   // Keybox
   'keybox.title': 'Keybox Management',

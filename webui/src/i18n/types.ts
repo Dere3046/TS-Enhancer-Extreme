@@ -75,6 +75,7 @@ export interface I18nDict {
   'target.processing_system': string
   'target.finishing': string
   'target.complete': string
+  'target.loading_more': string
 
   // Keybox
   'keybox.title': string

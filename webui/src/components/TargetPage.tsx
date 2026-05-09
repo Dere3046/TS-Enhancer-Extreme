@@ -161,6 +161,7 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
   const [loading, setLoading] = useState(true)
   const [progress, setProgress] = useState(0)
   const [progressText, setProgressText] = useState('')
+  const [renderLimit, setRenderLimit] = useState(50)
   const [, tick] = useState(0)
 
   // use Set in ref to avoid re-render on toggle
@@ -318,13 +319,30 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
       )
     }
 
-    // stable alpha sort, never changes on toggle
     list.sort((a, b) =>
       (a.appName || a.packageName || '').localeCompare(b.appName || b.packageName || '')
     )
 
     return list
   }, [allApps, showSystem, search])
+
+  // progressive render to avoid blocking main thread
+  useEffect(() => {
+    if (loading || filtered.length === 0) return
+    setRenderLimit(50)
+    let current = 50
+    const step = 100
+    const interval = setInterval(() => {
+      current += step
+      if (current >= filtered.length) {
+        setRenderLimit(filtered.length)
+        clearInterval(interval)
+      } else {
+        setRenderLimit(current)
+      }
+    }, 16)
+    return () => clearInterval(interval)
+  }, [loading, filtered.length])
 
   if (loading) {
     return (
@@ -351,7 +369,7 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
           {t('target.no_results')}
         </div>
       ) : (
-        filtered.map((app) => (
+        filtered.slice(0, renderLimit).map((app) => (
           <AppItem
             key={app.packageName}
             app={app}
@@ -360,6 +378,11 @@ export function TargetPage({ searchText = '', showSystemApps = false, blacklistM
             onToggle={handleToggle}
           />
         ))
+      )}
+      {renderLimit < filtered.length && (
+        <div className="text-center py-4 text-xs" style={{ color: colors.onSurfaceVariant }}>
+          {t('target.loading_more') || `Loading ${renderLimit}/${filtered.length}...`}
+        </div>
       )}
     </div>
   )

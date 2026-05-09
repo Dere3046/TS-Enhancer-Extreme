@@ -73,6 +73,7 @@ const dict: I18nDict = {
   'target.processing_system': '正在处理系统应用...',
   'target.finishing': '正在完成加载...',
   'target.complete': '加载完成',
+  'target.loading_more': '加载更多中...',
 
   // Keybox
   'keybox.title': 'Keybox 管理',
